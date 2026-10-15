@@ -210,3 +210,44 @@ def test_cli_session_name_option(
     assert main(argv, extractor=make_extractor(fake_client)) == 0
     names = [p.get("session_name") for e, p in fake_client.calls if e == "sessions"]
     assert names == ["Qualifying"]
+
+
+def test_run_years_reports_progress_and_covers_each_year(
+    fake_client: FakeClient, tmp_path: Path
+) -> None:
+    from f1.pipelines.race_pipeline import run_years
+
+    events: list[tuple[int, int, str]] = []
+    reports, failed = run_years(
+        [2023, 2024],
+        make_extractor(fake_client),
+        ParquetSink(tmp_path),
+        "r",
+        session_names=("Race",),
+        progress=lambda done, total, label: events.append((done, total, label)),
+    )
+    assert failed == []
+    assert [e[:2] for e in events] == [(0, len(reports))] + [
+        (i, len(reports)) for i in range(1, len(reports) + 1)
+    ]
+    assert events[0][2] == "" and "Test Grand Prix" in events[-1][2]
+    assert {
+        y for c, p in fake_client.calls if c == "meetings" for y in [p["year"]]
+    } == {
+        2023,
+        2024,
+    }
+
+
+def test_cli_accepts_several_years_and_all_years(
+    fake_client: FakeClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    extractor = make_extractor(fake_client)
+    assert main(["--year", "2023", "--year", "2024"], extractor=extractor) == 0
+    years = {p["year"] for c, p in fake_client.calls if c == "meetings"}
+    assert years == {2023, 2024}
+    fake_client.calls.clear()
+    assert main(["--all-years"], extractor=extractor) == 0
+    asked = {p["year"] for c, p in fake_client.calls if c == "meetings"}
+    assert {2023, 2024} <= asked

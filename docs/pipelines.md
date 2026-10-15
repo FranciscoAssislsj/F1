@@ -19,7 +19,8 @@ poetry run python -m f1.pipelines.cli --year 2024 --skip-existing
 
 | Argumento | Descrição |
 |---|---|
-| `--year` | ano a processar (exclusivo com `--session-key`) |
+| `--year` | ano a processar; repetível, ex.: `--year 2023 --year 2024` (exclusivo com `--session-key`) |
+| `--all-years` | todos os anos, de 2023 até o atual (exclusivo com `--year`/`--session-key`) |
 | `--session-key` | uma sessão pelo `session_key` |
 | `--session-name` | tipo de sessão com `--year` (`Race`, `Qualifying`, ...); padrão: `Race` e `Qualifying` |
 | `--start`, `--end` | janela `AAAA-MM-DD` sobre `date_start`/`date_end` dos fins de semana |
@@ -54,6 +55,9 @@ de cada GP, com filtros de ano e tipo de sessão (Race/Qualifying):
 poetry run streamlit run src/f1/dashboard.py
 # ou: poetry run task dashboard
 ```
+
+Pela barra lateral (**⬇️ Carregar dados da OpenF1**) dá para escolher os anos e rodar o
+pipeline com uma barra de progresso; no terminal, a CLI mostra a mesma barra.
 
 Ele lê os Parquet de `DATA_DIR` (padrão `data/`); sem dados, mostra como gerá-los.
 

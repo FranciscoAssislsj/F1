@@ -9,7 +9,14 @@ from f1.ingestion.extractors import Extractor
 from f1.integrations.parquet_reader import ParquetReader
 from f1.integrations.parquet_sink import ParquetSink
 from f1.pipelines.race_pipeline import run_session_key
-from f1.transformation.metrics import fastest_laps, format_lap_time
+from f1.transformation.metrics import (
+    fastest_laps,
+    format_lap_time,
+    pace_laps,
+    session_laps,
+    team_fastest_counts,
+    top_speeds,
+)
 from tests.conftest import FakeClient
 
 DASHBOARD = Path(__file__).parents[2] / "src" / "f1" / "dashboard.py"
@@ -143,3 +150,49 @@ def test_dashboard_picks_up_new_data_without_clearing_cache(
     load()
     app.run()
     assert app.expander[0].label.startswith("🏁 Novo GP")
+
+
+def test_team_fastest_counts(loaded: ParquetReader) -> None:
+    counts = team_fastest_counts(laps_for(loaded))
+    assert counts.to_dict("records") == [{"team_name": "Alpha", "gps": 1}]
+
+
+def test_session_laps_pace_and_top_speeds(loaded: ParquetReader) -> None:
+    rows = session_laps(loaded.read_all("laps"), loaded.read_all("drivers"), 9000)
+    assert set(rows["driver"]) == {"Ana Silva", "Bob Lee"}
+    assert rows["colour"].str.startswith("#").all()
+    pace = pace_laps(rows)
+    assert pace["lap_duration"].notna().all()
+    assert pace["lap_duration"].dtype == "float64"
+    speeds = top_speeds(rows)
+    assert speeds["st_speed"].is_monotonic_decreasing
+    assert set(speeds["driver"]) <= {"Ana Silva", "Bob Lee"}
+
+
+def test_dashboard_renders_charts_tab(
+    loaded: ParquetReader, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    app = AppTest.from_file(str(DASHBOARD), default_timeout=30).run()
+    assert not app.exception
+    assert [t.label for t in app.tabs] == ["🏁 Tabelas", "📊 Gráficos"]
+    assert app.selectbox(key="chart_gp").value == 9000
+    assert len(app.get("vega_lite_chart")) >= 3
+
+
+def test_dashboard_loader_runs_pipeline_with_progress(
+    api_data: dict, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        "f1.integrations.openf1_client.OpenF1Client.from_settings",
+        classmethod(lambda cls, settings: FakeClient(api_data)),
+    )
+    monkeypatch.setattr("time.sleep", lambda _: None)
+    app = AppTest.from_file(str(DASHBOARD), default_timeout=30).run()
+    assert "Nenhum dado" in app.info[0].value
+    app.sidebar.multiselect(key="load_years").set_value([2024])
+    app.sidebar.button(key="load_run").click().run()
+    assert not app.exception
+    assert (tmp_path / "laps").exists()
+    assert app.expander[0].label.startswith("🏁 Test Grand Prix")
