@@ -1,0 +1,30 @@
+[
+  {
+    "session_key": 9000,
+    "meeting_key": 1200,
+    "driver_number": 1,
+    "full_name": "Ana Silva",
+    "broadcast_name": "A SILVA",
+    "name_acronym": "SIL",
+    "first_name": "Ana",
+    "last_name": "Silva",
+    "team_name": "Alpha",
+    "team_colour": "3671C6",
+    "headshot_url": null,
+    "country_code": "BRA"
+  },
+  {
+    "session_key": 9000,
+    "meeting_key": 1200,
+    "driver_number": 44,
+    "full_name": "Bob Lee",
+    "broadcast_name": "B LEE",
+    "name_acronym": "LEE",
+    "first_name": "Bob",
+    "last_name": "Lee",
+    "team_name": "Beta",
+    "team_colour": "27F4D2",
+    "headshot_url": "https://example.com/lee.png",
+    "country_code": "GBR"
+  }
+]

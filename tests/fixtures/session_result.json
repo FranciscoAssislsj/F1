@@ -1,0 +1,26 @@
+[
+  {
+    "session_key": 9000,
+    "meeting_key": 1200,
+    "driver_number": 1,
+    "position": 1,
+    "number_of_laps": 50,
+    "duration": 5400.5,
+    "gap_to_leader": 0,
+    "dnf": false,
+    "dns": false,
+    "dsq": false
+  },
+  {
+    "session_key": 9000,
+    "meeting_key": 1200,
+    "driver_number": 44,
+    "position": 2,
+    "number_of_laps": 49,
+    "duration": null,
+    "gap_to_leader": "+1 LAP",
+    "dnf": false,
+    "dns": false,
+    "dsq": false
+  }
+]

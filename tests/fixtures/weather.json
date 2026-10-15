@@ -1,0 +1,26 @@
+[
+  {
+    "session_key": 9000,
+    "meeting_key": 1200,
+    "date": "2024-05-05T13:00:10.000000+00:00",
+    "air_temperature": 25.1,
+    "track_temperature": 40.3,
+    "humidity": 55.0,
+    "pressure": 1012.5,
+    "rainfall": 0,
+    "wind_direction": 180,
+    "wind_speed": 2.1
+  },
+  {
+    "session_key": 9000,
+    "meeting_key": 1200,
+    "date": "2024-05-05T13:01:10.000000+00:00",
+    "air_temperature": 25.0,
+    "track_temperature": 40.1,
+    "humidity": 56.0,
+    "pressure": 1012.5,
+    "rainfall": 0,
+    "wind_direction": 185,
+    "wind_speed": 2.4
+  }
+]

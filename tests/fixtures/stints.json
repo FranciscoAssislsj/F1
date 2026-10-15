@@ -1,0 +1,22 @@
+[
+  {
+    "session_key": 9000,
+    "meeting_key": 1200,
+    "driver_number": 1,
+    "stint_number": 1,
+    "compound": "MEDIUM",
+    "lap_start": 1,
+    "lap_end": 20,
+    "tyre_age_at_start": 0
+  },
+  {
+    "session_key": 9000,
+    "meeting_key": 1200,
+    "driver_number": 1,
+    "stint_number": 2,
+    "compound": "HARD",
+    "lap_start": 21,
+    "lap_end": 50,
+    "tyre_age_at_start": 0
+  }
+]

@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(poetry config virtualenvs.in-project true --local)",
+      "PowerShell(poetry add requests pandas pyarrow 2>&1)",
+      "PowerShell(poetry add --group dev ruff pytest pytest-cov responses 2>&1)",
+      "PowerShell(poetry add --group docs \"mkdocs<2\" mkdocs-material \"mkdocstrings[python]\" 2>&1)",
+      "PowerShell(poetry run ruff --version)",
+      "PowerShell(poetry run pytest --version)",
+      "PowerShell(poetry run mkdocs --version)",
+      "PowerShell(poetry run python -c \"import sys,mkdocs;print\\(sys.prefix, mkdocs.__file__\\)\")",
+      "PowerShell(poetry env info)",
+      "PowerShell($env:VIRTUAL_ENV; $env:POETRY_VIRTUALENVS_CREATE; $env:POETRY_VIRTUALENVS_IN_PROJECT; poetry config --list | Select-String virtualenvs; \\(Get-Command poetry\\).Source)",
+      "PowerShell(poetry install --with dev,docs --no-interaction 2>&1)",
+      "PowerShell(poetry check 2>&1)",
+      "Bash(python -)",
+      "Bash(python -c ' *)",
+      "Bash(xxd)",
+      "Bash(git ls-files *)",
+      "Bash(cat)",
+      "Bash(python /tmp/patch.py)",
+      "Bash(sed -i 's/extractor.race_sessions\\(1200\\)/extractor.sessions_named\\(1200, \"Race\"\\)/' tests/unit/test_ingestion.py)",
+      "Bash(sed -i 's/extractor.race_sessions\\(int\\(m\\\\[\"meeting_key\"\\\\]\\)\\)/extractor.sessions_named\\(int\\(m[\"meeting_key\"]\\), \"Race\"\\)/' tests/integration/test_openf1_live.py)",
+      "Bash(sed -i 's/run_year\\(2024, make_extractor\\(FakeClient\\(api_data\\)\\), sink, \"r\"\\)/run_year\\(\\\\n        2024, make_extractor\\(FakeClient\\(api_data\\)\\), sink, \"r\", session_names=\\(\"Race\",\\)\\\\n    \\)/; s/run_year\\(2024, make_extractor\\(Failing\\(api_data\\)\\), sink, \"r\"\\)/run_year\\(\\\\n        2024, make_extractor\\(Failing\\(api_data\\)\\), sink, \"r\", session_names=\\(\"Race\",\\)\\\\n    \\)/' tests/unit/test_pipeline.py)",
+      "Bash(sed -i 's#meetings\" / \"meeting_key=1200\" / \"part.parquet\"\\).is_file\\(\\)#meetings\" / \"meeting_key=1200\" / \"part.parquet\"\\).is_file\\(\\)\\\\n    assert \\(tmp_path / \"sessions\" / SESSION_PART\\).is_file\\(\\)#' tests/unit/test_pipeline.py)",
+      "Bash(sed -i 's#├── sessions/meeting_key=1219/part.parquet#├── sessions/session_key=9606/part.parquet#; s#`sessions` \\(`session_name=Race`\\) | uma corrida#`sessions` \\(`Race` e `Qualifying`\\) | uma sessão#' docs/index.md)",
+      "Bash(sed -i 's#sessions?meeting_key=&session_name=Race#sessions?meeting_key=\\\\&session_name=Race|Qualifying#' docs/architecture.md)",
+      "PowerShell($l = Get-Content \"$env:TEMP\\\\f1_year.log\"; \\($l | Select-String \"falha transit\"\\).Count; \\($l | Select-String '\"level\": \"ERROR\"'\\).Count; $l | Select-Object -Last 3 | % { $_.Substring\\(0,[Math]::Min\\(230,$_.Length\\)\\) })",
+      "PowerShell($l = Get-Content \"$env:TEMP\\\\f1_year.log\" -Encoding UTF8; $l | Select-String '\"message\": \"\\(sessão concluída|sessão já|falha ao|execução abortada\\)' | % { $x=$_.ToString\\(\\); $x.Substring\\(0,[Math]::Min\\(200,$x.Length\\)\\) }; \\($l | Select-String \"TransientApiError: \"\\) | select -Last 2 | % { $_.ToString\\(\\).Substring\\(0,400\\) })",
+      "Bash(sed -i 's/attempts: int = 3,/attempts: int = 5,/; s/base_delay_s: float = 1.0,/base_delay_s: float = 2.0,/' src/f1/ingestion/extractors.py)",
+      "Bash(sed -i 's/rate_limit_delay_s: float = 0.5/rate_limit_delay_s: float = 2.0/' src/f1/config/settings.py)",
+      "Bash(sed -i 's|^docs = \"mkdocs build --strict\"|docs = \"mkdocs serve\"\\\\ndocs-build = \"mkdocs build --strict\"|' pyproject.toml)",
+      "Bash(sed -i 's|poetry run mkdocs build --strict\\\\npoetry run mkdocs serve||' docs/development.md)",
+      "Bash(sed -i 's|^poetry run mkdocs serve        # preview em http://127.0.0.1:8000|poetry run task docs          # preview em http://127.0.0.1:8000\\\\npoetry run task docs-build    # igual ao mkdocs build --strict|' docs/development.md)",
+      "Bash(sed -i 's|\\(`poetry run mkdocs serve`\\)|\\(`poetry run task docs`\\)|' README.md)"
+    ]
+  }
+}
