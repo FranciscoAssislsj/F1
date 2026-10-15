@@ -1,0 +1,74 @@
+[project]
+name = "f1"
+version = "0.1.0"
+description = "Pipeline de dados histÃ³ricos de F1 a partir da API OpenF1"
+authors = [
+    {name = "Francisco de Assis",email = "franciscofut25@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13,<4.0"
+dependencies = [
+    "requests (>=2.34.2,<3.0.0)",
+    "pandas (>=3.0.6,<4.0.0)",
+    "pyarrow (>=26.0.0,<27.0.0)",
+    "streamlit (>=1.66.0,<2.0.0)"
+]
+
+[tool.poetry]
+packages = [{include = "f1", from = "src"}]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "ruff (>=0.17.1,<0.18.0)",
+    "pytest (>=9.1.1,<10.0.0)",
+    "pytest-cov (>=7.1.0,<8.0.0)",
+    "responses (>=0.26.3,<0.27.0)",
+    "taskipy (>=1.14.1,<2.0.0)"
+]
+docs = [
+    "mkdocs (<2)",
+    "mkdocs-material (>=9.7.7,<10.0.0)",
+    "mkdocstrings[python] (>=1.0.7,<2.0.0)"
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["f1"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: testes que dependem de infraestrutura externa",
+]
+
+[tool.coverage.run]
+source = ["src/f1"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 50
+show_missing = true
+skip_covered = false
+
+[tool.taskipy.tasks]
+test = "pytest tests/unit/ --cov=src/f1 --cov-report=term-missing --cov-fail-under=50"
+lint = "ruff check ."
+format = "ruff format ."
+docs = "mkdocs serve"
+docs-build = "mkdocs build --strict"
+dashboard = "streamlit run src/f1/dashboard.py"

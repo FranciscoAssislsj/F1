@@ -1,0 +1,26 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - name: Instalar Poetry
+        run: pipx install poetry
+      - name: Instalar dependências
+        run: poetry install --no-interaction --with dev,docs
+      - name: Ruff lint
+        run: poetry run ruff check .
+      - name: Ruff format
+        run: poetry run ruff format --check .
+      - name: Testes unitários e cobertura
+        run: poetry run pytest tests/unit/ --cov=src/f1 --cov-report=term-missing --cov-fail-under=50
+      - name: Documentação
+        run: poetry run mkdocs build --strict

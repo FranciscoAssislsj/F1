@@ -1,0 +1,47 @@
+site_name: F1 — Pipeline OpenF1
+site_description: Pipeline de dados históricos de F1 a partir da API OpenF1
+docs_dir: docs
+theme:
+  name: material
+  language: pt-BR
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: red
+      accent: red
+      toggle:
+        icon: material/weather-night
+        name: Modo escuro
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: red
+      accent: red
+      toggle:
+        icon: material/weather-sunny
+        name: Modo claro
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+nav:
+  - Início: index.md
+  - Arquitetura: architecture.md
+  - Desenvolvimento: development.md
+  - Execução: pipelines.md
+  - Testes: testing.md
+  - Contribuição: contributing.md
+  - Referência da API: reference.md
