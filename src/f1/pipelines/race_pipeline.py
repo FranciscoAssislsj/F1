@@ -2,7 +2,7 @@
 
 import logging
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import date
 
 from f1.core.exceptions import (
@@ -20,6 +20,10 @@ from f1.validation.checks import validate
 logger = logging.getLogger(__name__)
 
 DEFAULT_SESSION_NAMES = ("Race", "Qualifying")
+FIRST_YEAR = 2023  # primeiro ano com dados na OpenF1
+
+# (concluídas, total, descrição da sessão que acabou de terminar)
+ProgressCallback = Callable[[int, int, str], None]
 
 _RECOVERABLE = (TransientApiError, PermanentApiError, SchemaValidationError)
 
@@ -121,6 +125,72 @@ def run_session_key(
     return run_session(sessions[0], meetings[0], extractor, sink, run_id, skip_existing)
 
 
+def plan_sessions(
+    years: Sequence[int],
+    extractor: Extractor,
+    start: date | None = None,
+    end: date | None = None,
+    session_names: Sequence[str] = DEFAULT_SESSION_NAMES,
+) -> list[tuple[Record, Record]]:
+    """Lista os pares (sessão, fim de semana) a processar, sem cancelados."""
+    plan: list[tuple[Record, Record]] = []
+    for year in years:
+        for meeting in extractor.meetings(year, start, end):
+            if meeting.get("is_cancelled"):
+                continue
+            for session_name in session_names:
+                for session in extractor.sessions_named(
+                    int(meeting["meeting_key"]), session_name
+                ):
+                    plan.append((session, meeting))
+    return plan
+
+
+def run_years(
+    years: Sequence[int],
+    extractor: Extractor,
+    sink: Sink,
+    run_id: str,
+    start: date | None = None,
+    end: date | None = None,
+    skip_existing: bool = False,
+    session_names: Sequence[str] = DEFAULT_SESSION_NAMES,
+    progress: ProgressCallback | None = None,
+) -> tuple[list[RunReport], list[int]]:
+    """Processa as sessões de ``session_names`` dos ``years`` informados.
+
+    Uma sessão que falhe é registrada e não impede as demais. ``progress`` é
+    chamado com ``(0, total, ...)`` ao fim do planejamento e depois a cada sessão.
+
+    Returns:
+        Os relatórios das sessões concluídas e os ``session_key`` que falharam.
+    """
+    plan = plan_sessions(years, extractor, start, end, session_names)
+    total = len(plan)
+    if progress:
+        progress(0, total, "")
+    reports: list[RunReport] = []
+    failed: list[int] = []
+    for done, (session, meeting) in enumerate(plan, start=1):
+        try:
+            reports.append(
+                run_session(session, meeting, extractor, sink, run_id, skip_existing)
+            )
+        except _RECOVERABLE:
+            logger.exception(
+                "falha ao processar sessão",
+                extra={"run_id": run_id, "session_key": session["session_key"]},
+            )
+            failed.append(int(session["session_key"]))
+        if progress:
+            label = (
+                f"{session.get('year')} · {meeting.get('meeting_name')} "
+                f"({session.get('session_name')})"
+            )
+            progress(done, total, label)
+    return reports, failed
+
+
 def run_year(
     year: int,
     extractor: Extractor,
@@ -130,37 +200,17 @@ def run_year(
     end: date | None = None,
     skip_existing: bool = False,
     session_names: Sequence[str] = DEFAULT_SESSION_NAMES,
+    progress: ProgressCallback | None = None,
 ) -> tuple[list[RunReport], list[int]]:
-    """Processa as sessões de ``session_names`` de um ano (ou janela ``start``-``end``).
-
-    Uma sessão que falhe é registrada e não impede as demais.
-
-    Returns:
-        Os relatórios das sessões concluídas e os ``session_key`` que falharam.
-    """
-    reports: list[RunReport] = []
-    failed: list[int] = []
-    for meeting in extractor.meetings(year, start, end):
-        if meeting.get("is_cancelled"):
-            continue
-        for session_name in session_names:
-            sessions = extractor.sessions_named(
-                int(meeting["meeting_key"]), session_name
-            )
-            for session in sessions:
-                try:
-                    reports.append(
-                        run_session(
-                            session, meeting, extractor, sink, run_id, skip_existing
-                        )
-                    )
-                except _RECOVERABLE:
-                    logger.exception(
-                        "falha ao processar sessão",
-                        extra={
-                            "run_id": run_id,
-                            "session_key": session["session_key"],
-                        },
-                    )
-                    failed.append(int(session["session_key"]))
-    return reports, failed
+    """Processa um ano (ou janela ``start``-``end``); veja ``run_years``."""
+    return run_years(
+        [year],
+        extractor,
+        sink,
+        run_id,
+        start,
+        end,
+        skip_existing,
+        session_names,
+        progress,
+    )

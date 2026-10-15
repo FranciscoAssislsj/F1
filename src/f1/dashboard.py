@@ -3,17 +3,39 @@
 Execução: ``poetry run streamlit run src/f1/dashboard.py``
 """
 
+from datetime import date
 from pathlib import Path
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
 from f1.config.settings import Settings
+from f1.core.exceptions import (
+    PermanentApiError,
+    SchemaValidationError,
+    TransientApiError,
+)
+from f1.ingestion.extractors import Extractor
+from f1.integrations.openf1_client import OpenF1Client
 from f1.integrations.parquet_reader import ParquetReader
-from f1.transformation.metrics import fastest_laps, format_lap_time
+from f1.integrations.parquet_sink import ParquetSink
+from f1.pipelines.race_pipeline import FIRST_YEAR, run_years
+from f1.transformation.metrics import (
+    DEFAULT_COLOUR,
+    fastest_laps,
+    format_lap_time,
+    pace_laps,
+    session_laps,
+    team_fastest_counts,
+    top_speeds,
+)
+from f1.utils.logging import new_run_id
 
 TOP_LAPS = 5
 ENTITIES = ("meetings", "sessions", "drivers", "laps")
+ACCENT = "#e10600"
+DASHES = [[1, 0], [6, 4], [2, 2]]  # um traço por companheiro de equipe
 
 
 @st.cache_data(show_spinner=False)
@@ -36,16 +58,201 @@ def render_session(rows: pd.DataFrame) -> None:
     st.dataframe(table, hide_index=True, width="stretch")
 
 
+def colour_scale(frame: pd.DataFrame, key: str) -> alt.Scale:
+    pairs = frame.drop_duplicates(key)
+    return alt.Scale(domain=pairs[key].tolist(), range=pairs["colour"].tolist())
+
+
+def team_chart(table: pd.DataFrame) -> alt.Chart:
+    counts = team_fastest_counts(table)
+    return (
+        alt.Chart(counts)
+        .mark_bar(color=ACCENT)
+        .encode(
+            y=alt.Y("team_name:N", sort="-x", title=None),
+            x=alt.X(
+                "gps:Q",
+                title="GPs com a volta mais rápida",
+                axis=alt.Axis(tickMinStep=1),
+            ),
+            tooltip=[
+                alt.Tooltip("team_name:N", title="Equipe"),
+                alt.Tooltip("gps:Q", title="GPs"),
+            ],
+        )
+    )
+
+
+def gap_chart(rows: pd.DataFrame, colours: dict[str, str]) -> alt.Chart:
+    gaps = rows.assign(
+        gap=rows["lap_duration"] - rows["lap_duration"].min(),
+        tempo=rows["lap_duration"].map(format_lap_time),
+        colour=rows["team_name"].map(colours).fillna(DEFAULT_COLOUR),
+    )
+    return (
+        alt.Chart(gaps)
+        .mark_bar()
+        .encode(
+            y=alt.Y("driver:N", sort=alt.EncodingSortField("rank"), title=None),
+            x=alt.X("gap:Q", title="Diferença para a mais rápida (s)"),
+            color=alt.Color(
+                "driver:N", scale=colour_scale(gaps, "driver"), legend=None
+            ),
+            tooltip=[
+                alt.Tooltip("driver:N", title="Piloto"),
+                alt.Tooltip("team_name:N", title="Equipe"),
+                alt.Tooltip("tempo:N", title="Tempo"),
+                alt.Tooltip("gap:Q", title="Diferença (s)", format="+.3f"),
+            ],
+        )
+    )
+
+
+def pace_chart(pace: pd.DataFrame) -> alt.Chart:
+    pace = pace.assign(tempo=pace["lap_duration"].map(format_lap_time))
+    return (
+        alt.Chart(pace)
+        .mark_line(point=alt.OverlayMarkDef(size=18))
+        .encode(
+            x=alt.X("lap_number:Q", title="Volta", axis=alt.Axis(tickMinStep=1)),
+            y=alt.Y(
+                "lap_duration:Q",
+                title="Tempo de volta (s)",
+                scale=alt.Scale(zero=False),
+            ),
+            color=alt.Color(
+                "driver:N", scale=colour_scale(pace, "driver"), title="Piloto"
+            ),
+            strokeDash=alt.StrokeDash(
+                "mate:N", scale=alt.Scale(domain=[0, 1, 2], range=DASHES), legend=None
+            ),
+            tooltip=[
+                alt.Tooltip("driver:N", title="Piloto"),
+                alt.Tooltip("lap_number:Q", title="Volta"),
+                alt.Tooltip("tempo:N", title="Tempo"),
+            ],
+        )
+        .interactive()
+    )
+
+
+def speed_chart(speeds: pd.DataFrame) -> alt.Chart:
+    return (
+        alt.Chart(speeds)
+        .mark_bar()
+        .encode(
+            y=alt.Y("driver:N", sort="-x", title=None),
+            x=alt.X(
+                "st_speed:Q",
+                title="Velocidade máxima (km/h)",
+                scale=alt.Scale(zero=False),
+            ),
+            color=alt.Color(
+                "driver:N", scale=colour_scale(speeds, "driver"), legend=None
+            ),
+            tooltip=[
+                alt.Tooltip("driver:N", title="Piloto"),
+                alt.Tooltip("team_name:N", title="Equipe"),
+                alt.Tooltip("st_speed:Q", title="km/h"),
+            ],
+        )
+    )
+
+
+def render_charts(table: pd.DataFrame, data: dict[str, pd.DataFrame]) -> None:
+    st.subheader("Temporada")
+    st.altair_chart(team_chart(table), width="stretch")
+
+    st.subheader("Por Grande Prêmio")
+    labels = {
+        key: f"{rows.iloc[0]['meeting_name']} — {rows.iloc[0]['location']}"
+        for key, rows in table.groupby("session_key", sort=False)
+    }
+    session_key = st.selectbox(
+        "Grande Prêmio", list(labels), format_func=labels.get, key="chart_gp"
+    )
+    rows = session_laps(data["laps"], data["drivers"], int(session_key))
+    colours = (
+        rows.drop_duplicates("team_name").set_index("team_name")["colour"].to_dict()
+    )
+
+    left, right = st.columns(2)
+    with left:
+        st.markdown(f"**{TOP_LAPS} voltas mais rápidas**")
+        top = table[table["session_key"].eq(session_key)]
+        st.altair_chart(gap_chart(top, colours), width="stretch")
+    with right:
+        st.markdown("**Velocidade máxima por piloto**")
+        speeds = top_speeds(rows)
+        if speeds.empty:
+            st.caption("Sem dados de velocidade para esta sessão.")
+        else:
+            st.altair_chart(speed_chart(speeds), width="stretch")
+
+    st.markdown("**Ritmo volta a volta**")
+    pace = pace_laps(rows)
+    if pace.empty:
+        st.caption("Sem voltas cronometradas para esta sessão.")
+        return
+    order = pace.groupby("driver")["lap_duration"].min().sort_values().index.tolist()
+    chosen = st.multiselect(
+        "Pilotos", order, default=order[:5], key=f"pace_{session_key}"
+    )
+    if chosen:
+        st.altair_chart(pace_chart(pace[pace["driver"].isin(chosen)]), width="stretch")
+    else:
+        st.caption("Escolha ao menos um piloto.")
+
+
+def render_loader(settings: Settings) -> None:
+    """Barra lateral que roda o pipeline para vários anos, com barra de progresso."""
+    years = list(range(date.today().year, FIRST_YEAR - 1, -1))
+    with st.sidebar.expander("⬇️ Carregar dados da OpenF1"):
+        chosen = st.multiselect("Anos", years, default=years, key="load_years")
+        skip = st.checkbox("Pular sessões já carregadas", value=True, key="load_skip")
+        run = st.button("Carregar", disabled=not chosen, key="load_run")
+        bar = st.empty()
+    if not run:
+        return
+
+    def on_progress(done: int, total: int, label: str) -> None:
+        text = f"{done}/{total} sessões — {label}" if done else "Listando sessões…"
+        bar.progress(done / total if total else 1.0, text=text)
+
+    bar.progress(0.0, text="Listando sessões…")
+    extractor = Extractor(OpenF1Client.from_settings(settings))
+    try:
+        reports, failed = run_years(
+            sorted(chosen),
+            extractor,
+            ParquetSink(settings.data_dir),
+            new_run_id(),
+            skip_existing=skip,
+            progress=on_progress,
+        )
+    except (TransientApiError, PermanentApiError, SchemaValidationError) as exc:
+        bar.empty()
+        st.sidebar.error(f"Carga interrompida: {exc}")
+        return
+    bar.progress(1.0, text=f"Concluído: {len(reports)} sessões")
+    if failed:
+        st.sidebar.warning(f"{len(failed)} sessões falharam: {failed}")
+    else:
+        st.rerun()
+
+
 def main() -> None:
     st.set_page_config(page_title="F1 — OpenF1", page_icon="🏎️", layout="wide")
-    data_dir = str(Settings.from_env().data_dir)
+    settings = Settings.from_env()
+    data_dir = str(settings.data_dir)
+    render_loader(settings)
     data = load_data(data_dir, ParquetReader(Path(data_dir)).last_modified_ns())
     sessions = data["sessions"]
     if sessions.empty or data["laps"].empty:
         st.title("🏎️ F1 — Voltas mais rápidas por circuito")
         st.info(
-            f"Nenhum dado em `{data_dir}`. Rode antes: "
-            "`poetry run python -m f1.pipelines.cli --year 2024`"
+            f"Nenhum dado em `{data_dir}`. Use **Carregar dados da OpenF1** na barra "
+            "lateral ou rode `poetry run python -m f1.pipelines.cli --all-years`"
         )
         return
 
@@ -67,13 +274,18 @@ def main() -> None:
     if table.empty:
         st.warning("Sem voltas registradas para este filtro.")
         return
-    for _, rows in table.groupby("session_key", sort=False):
-        first = rows.iloc[0]
-        label = (
-            f"🏁 {first['meeting_name']} — {first['location']}, {first['country_name']}"
-        )
-        with st.expander(label):
-            render_session(rows)
+    tab_table, tab_charts = st.tabs(["🏁 Tabelas", "📊 Gráficos"])
+    with tab_table:
+        for _, rows in table.groupby("session_key", sort=False):
+            first = rows.iloc[0]
+            label = (
+                f"🏁 {first['meeting_name']} — {first['location']}, "
+                f"{first['country_name']}"
+            )
+            with st.expander(label):
+                render_session(rows)
+    with tab_charts:
+        render_charts(table, data)
 
 
 main()

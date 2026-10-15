@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import sys
 import time
 from collections.abc import Sequence
 from datetime import date
@@ -18,8 +19,9 @@ from f1.integrations.openf1_client import OpenF1Client
 from f1.integrations.parquet_sink import ParquetSink
 from f1.pipelines.race_pipeline import (
     DEFAULT_SESSION_NAMES,
+    FIRST_YEAR,
     run_session_key,
-    run_year,
+    run_years,
 )
 from f1.utils.logging import configure_logging, new_run_id
 
@@ -30,7 +32,14 @@ def build_parser() -> argparse.ArgumentParser:
     """Cria o parser de argumentos."""
     parser = argparse.ArgumentParser(description="Pipeline de corridas da OpenF1")
     target = parser.add_mutually_exclusive_group(required=True)
-    target.add_argument("--year", type=int, help="Ano a processar")
+    target.add_argument(
+        "--year", type=int, action="append", help="Ano a processar (repetível)"
+    )
+    target.add_argument(
+        "--all-years",
+        action="store_true",
+        help=f"Todos os anos disponíveis, de {FIRST_YEAR} até o atual",
+    )
     target.add_argument("--session-key", type=int, help="Uma sessão específica")
     parser.add_argument("--start", type=date.fromisoformat, help="Início (AAAA-MM-DD)")
     parser.add_argument("--end", type=date.fromisoformat, help="Fim (AAAA-MM-DD)")
@@ -46,6 +55,21 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+BAR_WIDTH = 30
+
+
+def show_progress(done: int, total: int, label: str) -> None:
+    """Barra de progresso em stderr (só em terminal interativo)."""
+    if not sys.stderr.isatty():
+        return
+    filled = BAR_WIDTH * done // total if total else BAR_WIDTH
+    bar = "█" * filled + "░" * (BAR_WIDTH - filled)
+    pct = 100 * done // total if total else 100
+    sys.stderr.write(f"\r\x1b[K[{bar}] {pct:3d}% {done}/{total} {label}")
+    sys.stderr.write("\n" if done == total else "")
+    sys.stderr.flush()
+
+
 def main(
     argv: Sequence[str] | None = None,
     extractor: Extractor | None = None,
@@ -53,7 +77,7 @@ def main(
 ) -> int:
     """Executa o pipeline; retorna 0 em sucesso e 1 se houve falhas."""
     args = build_parser().parse_args(argv)
-    if (args.start or args.end) and args.year is None:
+    if (args.start or args.end) and not args.year:
         build_parser().error("--start/--end exigem --year")
     configure_logging()
     settings = Settings.from_env()
@@ -71,8 +95,9 @@ def main(
             ]
             failed: list[int] = []
         else:
-            reports, failed = run_year(
-                args.year,
+            years = args.year or list(range(FIRST_YEAR, date.today().year + 1))
+            reports, failed = run_years(
+                years,
                 extractor,
                 sink,
                 run_id,
@@ -80,6 +105,7 @@ def main(
                 args.end,
                 args.skip_existing,
                 args.session_names or DEFAULT_SESSION_NAMES,
+                show_progress,
             )
     except (TransientApiError, PermanentApiError, SchemaValidationError):
         logger.exception("execução abortada", extra={"run_id": run_id})
