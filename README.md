@@ -81,9 +81,6 @@ poetry run streamlit run src/f1/dashboard.py
 poetry run task dashboard
 ```
 
-O dashboard abre em <http://localhost:8501>. Sem dados em `data/`, ele exibe um aviso
-indicando o comando do pipeline.
-
 ## Estrutura do projeto
 
 ```
