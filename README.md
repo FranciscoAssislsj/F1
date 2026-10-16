@@ -123,6 +123,16 @@ poetry run ruff format --check .
 
 Para formatar automaticamente: `poetry run task format`.
 
+### Pre-commit
+
+Os hooks (`.pre-commit-config.yaml`) rodam Ruff (lint e format) e os testes unitários
+antes de cada commit:
+
+```bash
+pipx install pre-commit
+pre-commit install
+```
+
 ## Documentação
 
 ```bash
