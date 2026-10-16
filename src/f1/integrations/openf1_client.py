@@ -24,6 +24,14 @@ def _format_value(value: Any) -> str:
     return quote(str(value), safe=":")
 
 
+def _parse_retry_after(value: str | None) -> float | None:
+    """Converte ``Retry-After`` em segundos (só o formato numérico)."""
+    try:
+        return max(float(value), 0.0) if value else None
+    except ValueError:
+        return None
+
+
 def build_query(params: Params | None) -> str:
     """Monta a query string no formato aceito pela OpenF1.
 
@@ -83,7 +91,10 @@ class OpenF1Client:
             raise TransientApiError(f"Falha de rede em {endpoint}: {exc}") from exc
         status = response.status_code
         if status == 429 or status >= 500:
-            raise TransientApiError(f"HTTP {status} em {endpoint}")
+            raise TransientApiError(
+                f"HTTP {status} em {endpoint}",
+                retry_after_s=_parse_retry_after(response.headers.get("Retry-After")),
+            )
         if status == 404 and NO_RESULTS in response.text:
             return []
         if status >= 400:

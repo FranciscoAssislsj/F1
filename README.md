@@ -61,7 +61,7 @@ cp .env.example .env            # opcional; os padrões já funcionam
 |---|---|---|
 | `OPENF1_BASE_URL` | `https://api.openf1.org/v1` | URL base da API |
 | `API_TIMEOUT_S` | `30` | Timeout das requisições (s) |
-| `RATE_LIMIT_DELAY_S` | `2.0` | Intervalo entre requisições (s) |
+| `RATE_LIMIT_DELAY_S` | `4.0` | Intervalo entre requisições (s) |
 | `DATA_DIR` | `data` | Diretório de saída dos Parquet |
 
 ## Executar

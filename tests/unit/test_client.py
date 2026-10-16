@@ -54,6 +54,19 @@ def test_transient_statuses(status: int) -> None:
 
 
 @responses.activate
+@pytest.mark.parametrize(
+    ("header", "expected"), [("7", 7.0), ("abc", None), (None, None)]
+)
+def test_429_carries_retry_after(header: str | None, expected: float | None) -> None:
+    headers = {"Retry-After": header} if header else {}
+    responses.get(f"{BASE}/laps", status=429, headers=headers)
+    with pytest.raises(TransientApiError) as info:
+        make_client().get("laps")
+    assert info.value.retry_after_s == expected
+    assert "HTTP 429" in str(info.value)
+
+
+@responses.activate
 def test_404_no_results_is_empty_list() -> None:
     responses.get(f"{BASE}/laps", status=404, json={"detail": "No results found."})
     assert make_client().get("laps") == []

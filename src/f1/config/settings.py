@@ -18,7 +18,7 @@ class Settings:
 
     base_url: str = "https://api.openf1.org/v1"
     api_timeout_s: float = 30.0
-    rate_limit_delay_s: float = 2.0
+    rate_limit_delay_s: float = 4.0
     data_dir: Path = Path("data")
 
     @classmethod

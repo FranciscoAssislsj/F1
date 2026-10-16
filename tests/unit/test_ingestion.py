@@ -22,6 +22,20 @@ def test_retry_succeeds_after_transient_failures() -> None:
     assert delays == [1.0, 2.0]
 
 
+def test_retry_honors_retry_after() -> None:
+    delays: list[float] = []
+    outcomes = [TransientApiError("a", retry_after_s=10.0), "ok"]
+
+    def fn() -> str:
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    assert with_retry(fn, attempts=3, base_delay_s=1.0, sleep=delays.append) == "ok"
+    assert delays == [10.0]
+
+
 def test_retry_gives_up_after_attempts() -> None:
     calls: list[int] = []
 
