@@ -4,11 +4,16 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version-file: .python-version
@@ -22,5 +27,9 @@ jobs:
         run: poetry run ruff format --check .
       - name: Testes unitários e cobertura
         run: poetry run pytest tests/unit/ --cov=src/f1 --cov-report=term-missing --cov-fail-under=50
-      - name: Documentação
-        run: poetry run mkdocs build --strict
+      - name: Deploy da documentação
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          poetry run mkdocs gh-deploy --force --strict
