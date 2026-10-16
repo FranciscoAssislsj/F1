@@ -52,7 +52,11 @@
       "Bash(.venv/Scripts/python -m ruff check .)",
       "Bash(.venv/Scripts/python -m ruff format --check .)",
       "Bash(.venv/Scripts/python -m pytest tests/unit -q --cov=src/f1 --cov-fail-under=50)",
-      "Bash(.venv/Scripts/python -m mkdocs build --strict)"
+      "Bash(.venv/Scripts/python -m mkdocs build --strict)",
+      "Bash(poetry add *)",
+      "Bash(sed -i 's/^pipx install pre-commit$/poetry run pre-commit install/; /^pre-commit install$/d' README.md)",
+      "Bash(sed -n '/### Pre-commit/,/^```$/p' README.md)",
+      "Bash(git status *)"
     ]
   }
 }
