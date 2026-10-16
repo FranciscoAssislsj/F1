@@ -29,12 +29,14 @@ def with_retry[T](
     for attempt in range(1, attempts + 1):
         try:
             return fn()
-        except TransientApiError:
+        except TransientApiError as exc:
             if attempt == attempts:
                 raise
-            delay = base_delay_s * 2 ** (attempt - 1)
+            delay = max(base_delay_s * 2 ** (attempt - 1), exc.retry_after_s or 0.0)
             logger.warning(
-                "falha transitória; nova tentativa",
+                "falha transitória; nova tentativa: %s (espera %.1fs)",
+                exc,
+                delay,
                 extra={"attempt": attempt, "delay_s": delay},
             )
             sleep(delay)

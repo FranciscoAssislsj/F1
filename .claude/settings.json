@@ -46,7 +46,13 @@
       "Bash(.venv/Scripts/python.exe -m pytest tests/unit/test_dashboard.py -q)",
       "Bash(sed -i 's/\"driver_number\", \"name_acronym\", \"team_name\", \"team_colour\"/\"driver_number\", \"full_name\", \"team_name\", \"team_colour\"/; s/rows\\\\[\"name_acronym\"\\\\]/rows[\"full_name\"]/; s/piloto \\(sigla\\)/piloto \\(nome completo\\)/' src/f1/transformation/metrics.py)",
       "Bash(sed -i 's/{\"SIL\", \"LEE\"}/{\"Ana Silva\", \"Bob Lee\"}/g' tests/unit/test_dashboard.py)",
-      "Bash(.venv/Scripts/python.exe -m pytest tests/unit/test_pipeline.py -q)"
+      "Bash(.venv/Scripts/python.exe -m pytest tests/unit/test_pipeline.py -q)",
+      "PowerShell(poetry run python -m pytest tests/unit -q 2>&1)",
+      "PowerShell(poetry install --with dev 2>&1)",
+      "Bash(.venv/Scripts/python -m ruff check .)",
+      "Bash(.venv/Scripts/python -m ruff format --check .)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit -q --cov=src/f1 --cov-fail-under=50)",
+      "Bash(.venv/Scripts/python -m mkdocs build --strict)"
     ]
   }
 }

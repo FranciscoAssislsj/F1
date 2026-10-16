@@ -3,12 +3,14 @@
 Execução: ``poetry run streamlit run src/f1/dashboard.py``
 """
 
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
 import altair as alt
 import pandas as pd
 import streamlit as st
+from streamlit.delta_generator import DeltaGenerator
 
 from f1.config.settings import Settings
 from f1.core.exceptions import (
@@ -159,7 +161,9 @@ def speed_chart(speeds: pd.DataFrame) -> alt.Chart:
     )
 
 
-def render_charts(table: pd.DataFrame, data: dict[str, pd.DataFrame]) -> None:
+def render_charts(
+    table: pd.DataFrame, data: dict[str, pd.DataFrame], suffix: str = ""
+) -> None:
     st.subheader("Temporada")
     st.altair_chart(team_chart(table), width="stretch")
 
@@ -169,7 +173,7 @@ def render_charts(table: pd.DataFrame, data: dict[str, pd.DataFrame]) -> None:
         for key, rows in table.groupby("session_key", sort=False)
     }
     session_key = st.selectbox(
-        "Grande Prêmio", list(labels), format_func=labels.get, key="chart_gp"
+        "Grande Prêmio", list(labels), format_func=labels.get, key=f"chart_gp{suffix}"
     )
     rows = session_laps(data["laps"], data["drivers"], int(session_key))
     colours = (
@@ -196,7 +200,7 @@ def render_charts(table: pd.DataFrame, data: dict[str, pd.DataFrame]) -> None:
         return
     order = pace.groupby("driver")["lap_duration"].min().sort_values().index.tolist()
     chosen = st.multiselect(
-        "Pilotos", order, default=order[:5], key=f"pace_{session_key}"
+        "Pilotos", order, default=order[:5], key=f"pace_{session_key}{suffix}"
     )
     if chosen:
         st.altair_chart(pace_chart(pace[pace["driver"].isin(chosen)]), width="stretch")
@@ -204,26 +208,37 @@ def render_charts(table: pd.DataFrame, data: dict[str, pd.DataFrame]) -> None:
         st.caption("Escolha ao menos um piloto.")
 
 
-def render_loader(settings: Settings) -> None:
-    """Barra lateral que roda o pipeline para vários anos, com barra de progresso."""
+def loader_controls() -> tuple[list[int], bool, bool, DeltaGenerator]:
+    """Controles da barra lateral; devolve anos, "pular", "carregar" e a barra."""
     years = list(range(date.today().year, FIRST_YEAR - 1, -1))
     with st.sidebar.expander("⬇️ Carregar dados da OpenF1"):
-        chosen = st.multiselect("Anos", years, default=years, key="load_years")
+        chosen = st.multiselect("Anos", years, default=years[:1], key="load_years")
         skip = st.checkbox("Pular sessões já carregadas", value=True, key="load_skip")
         run = st.button("Carregar", disabled=not chosen, key="load_run")
         bar = st.empty()
-    if not run:
-        return
+    return chosen, skip, run, bar
+
+
+def run_loader(
+    settings: Settings,
+    years: list[int],
+    skip: bool,
+    bar: DeltaGenerator,
+    on_session: Callable[[int], None],
+) -> None:
+    """Roda o pipeline; ``on_session`` é chamado a cada sessão concluída."""
 
     def on_progress(done: int, total: int, label: str) -> None:
         text = f"{done}/{total} sessões — {label}" if done else "Listando sessões…"
         bar.progress(done / total if total else 1.0, text=text)
+        if done:
+            on_session(done)
 
     bar.progress(0.0, text="Listando sessões…")
     extractor = Extractor(OpenF1Client.from_settings(settings))
     try:
         reports, failed = run_years(
-            sorted(chosen),
+            sorted(years),
             extractor,
             ParquetSink(settings.data_dir),
             new_run_id(),
@@ -241,33 +256,29 @@ def render_loader(settings: Settings) -> None:
         st.rerun()
 
 
-def main() -> None:
-    st.set_page_config(page_title="F1 — OpenF1", page_icon="🏎️", layout="wide")
-    settings = Settings.from_env()
-    data_dir = str(settings.data_dir)
-    render_loader(settings)
-    data = load_data(data_dir, ParquetReader(Path(data_dir)).last_modified_ns())
+def render_content(
+    data: dict[str, pd.DataFrame],
+    data_dir: str,
+    year: int | None,
+    session_name: str | None,
+    suffix: str = "",
+) -> None:
+    """Corpo da página; ``suffix`` evita chaves de widget repetidas ao redesenhar."""
     sessions = data["sessions"]
-    if sessions.empty or data["laps"].empty:
+    if year is None or sessions.empty or data["laps"].empty:
         st.title("🏎️ F1 — Voltas mais rápidas por circuito")
         st.info(
             f"Nenhum dado em `{data_dir}`. Use **Carregar dados da OpenF1** na barra "
             "lateral ou rode `poetry run python -m f1.pipelines.cli --all-years`"
         )
         return
-
-    st.sidebar.header("Filtros")
-    year = st.sidebar.selectbox("Ano", sorted(sessions["year"].unique(), reverse=True))
-    types = sorted(sessions.loc[sessions["year"] == year, "session_name"].unique())
-    session_name = st.sidebar.selectbox("Tipo de sessão", types)
-
     st.title(f"🏎️ F1 — {TOP_LAPS} voltas mais rápidas por circuito")
     table = fastest_laps(
         data["laps"],
         data["drivers"],
         sessions,
         data["meetings"],
-        int(year),
+        year,
         session_name,
         TOP_LAPS,
     )
@@ -285,7 +296,60 @@ def main() -> None:
             with st.expander(label):
                 render_session(rows)
     with tab_charts:
-        render_charts(table, data)
+        render_charts(table, data, suffix)
+
+
+def live_filters(
+    sessions: pd.DataFrame, year: int | None, name: str | None, loading: list[int]
+) -> tuple[int, str] | None:
+    """Ano e sessão exibidos durante a carga (o filtro, se estiver sendo carregado)."""
+    if sessions.empty:
+        return None
+    available = {int(y) for y in sessions["year"].unique()}
+    if year not in available or year not in loading:
+        candidates = [y for y in loading if y in available]
+        if not candidates:
+            return None
+        year = max(candidates)
+    types = sorted(sessions.loc[sessions["year"] == year, "session_name"].unique())
+    return year, name if name in types else types[0]
+
+
+def main() -> None:
+    st.set_page_config(page_title="F1 — OpenF1", page_icon="🏎️", layout="wide")
+    settings = Settings.from_env()
+    data_dir = str(settings.data_dir)
+    reader = ParquetReader(Path(data_dir))
+    years, skip, run, bar = loader_controls()
+    data = load_data(data_dir, reader.last_modified_ns())
+    sessions = data["sessions"]
+
+    year: int | None = None
+    session_name: str | None = None
+    if not (sessions.empty or data["laps"].empty):
+        st.sidebar.header("Filtros")
+        year = int(
+            st.sidebar.selectbox("Ano", sorted(sessions["year"].unique(), reverse=True))
+        )
+        types = sorted(sessions.loc[sessions["year"] == year, "session_name"].unique())
+        session_name = st.sidebar.selectbox("Tipo de sessão", types)
+
+    content = st.empty()
+    with content.container():
+        render_content(data, data_dir, year, session_name)
+    if not run:
+        return
+
+    def refresh(done: int) -> None:
+        """Redesenha o corpo da página com o que já foi gravado em disco."""
+        fresh = load_data(data_dir, reader.last_modified_ns())
+        view = live_filters(fresh["sessions"], year, session_name, years)
+        if view is None or fresh["laps"].empty:
+            return
+        with content.container():
+            render_content(fresh, data_dir, view[0], view[1], suffix=f"_live{done}")
+
+    run_loader(settings, years, skip, bar, refresh)
 
 
 main()
