@@ -622,7 +622,11 @@ poetry<span class="w"> </span>run<span class="w"> </span>python<span class="w"> 
 <tbody>
 <tr>
 <td><code>--year</code></td>
-<td>ano a processar (exclusivo com <code>--session-key</code>)</td>
+<td>ano a processar; repetível, ex.: <code>--year 2023 --year 2024</code> (exclusivo com <code>--session-key</code>)</td>
+</tr>
+<tr>
+<td><code>--all-years</code></td>
+<td>todos os anos, de 2023 até o atual (exclusivo com <code>--year</code>/<code>--session-key</code>)</td>
 </tr>
 <tr>
 <td><code>--session-key</code></td>
@@ -662,6 +666,8 @@ de cada GP, com filtros de ano e tipo de sessão (Race/Qualifying):</p>
 <div class="highlight"><pre><span></span><code>poetry<span class="w"> </span>run<span class="w"> </span>streamlit<span class="w"> </span>run<span class="w"> </span>src/f1/dashboard.py
 <span class="c1"># ou: poetry run task dashboard</span>
 </code></pre></div>
+<p>Pela barra lateral (<strong>⬇️ Carregar dados da OpenF1</strong>) dá para escolher os anos e rodar o
+pipeline com uma barra de progresso; no terminal, a CLI mostra a mesma barra.</p>
 <p>Ele lê os Parquet de <code>DATA_DIR</code> (padrão <code>data/</code>); sem dados, mostra como gerá-los.</p>
 <p>O dashboard detecta quando o pipeline grava novos Parquet e recarrega os dados
 sozinho; basta atualizar a página (F5), sem limpar o cache.</p>
