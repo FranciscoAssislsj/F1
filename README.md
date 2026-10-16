@@ -129,8 +129,7 @@ Os hooks (`.pre-commit-config.yaml`) rodam Ruff (lint e format) e os testes unit
 antes de cada commit:
 
 ```bash
-pipx install pre-commit
-pre-commit install
+poetry run pre-commit install
 ```
 
 ## Documentação
